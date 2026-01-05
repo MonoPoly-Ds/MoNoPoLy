@@ -1,13 +1,20 @@
 package server;
 
 import model.GameState;
+import utils.Constants; // ایمپورت جدید
+
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ServerMain {
-    private static final int PORT = 8080;
-    private static final int MAX_PLAYERS = 4;
+    // استفاده از Constants به جای اعداد هاردکد شده
+    private static final int PORT = Constants.PORT;
+    private static final int MAX_PLAYERS = Constants.MAX_PLAYERS;
+
+    private static List<ClientHandler> connectedClients = new ArrayList<>();
 
     public static void main(String[] args) {
         GameState.getInstance();
@@ -16,28 +23,42 @@ public class ServerMain {
 
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Server started on port " + PORT);
-            System.out.println("Waiting for players...");
+            System.out.println("Waiting for " + MAX_PLAYERS + " players...");
 
-            int connectedPlayers = 0;
-
-            while (connectedPlayers < MAX_PLAYERS) {
+            while (connectedClients.size() < MAX_PLAYERS) {
                 Socket clientSocket = serverSocket.accept();
-                connectedPlayers++;
 
-                String playerName = "Player " + connectedPlayers;
-                GameState.getInstance().addPlayer(connectedPlayers, playerName);
-
-                System.out.println(playerName + " connected.");
-
-                ClientHandler handler = new ClientHandler(clientSocket, connectedPlayers, gameEngine);
+                int pId = connectedClients.size() + 1;
+                ClientHandler handler = new ClientHandler(clientSocket, pId, gameEngine);
+                connectedClients.add(handler);
                 handler.start();
+
+                GameState.getInstance().addPlayer(pId, "Player " + pId);
+                System.out.println("Player " + pId + " connected.");
+
+                if (connectedClients.size() == MAX_PLAYERS) {
+                    System.out.println("Game Full! Starting...");
+                    GameState.getInstance().startGame();
+
+                    broadcast("GAME_STARTED");
+
+                    // ارسال وضعیت اولیه (پول و مکان)
+                    for (int i = 1; i <= MAX_PLAYERS; i++) {
+                        model.Player p = GameState.getInstance().getPlayer(i);
+                        broadcast("STATS:" + p.getId() + ":" + p.getName() + ":" + p.getMoney() + ":" + p.getPosition());
+                    }
+
+                    broadcast("TURN:1");
+                }
             }
-
-            System.out.println("All players connected. Game Starting!");
-            GameState.getInstance().startGame();
-
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+    public static void broadcast(String msg) {
+        for (ClientHandler client : connectedClients) {
+            client.sendMessage(msg);
         }
     }
 }
