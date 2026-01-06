@@ -11,31 +11,39 @@ public class LinkedList {
         this.size = 0;
     }
 
+
     public void add(Object data) {
         Node newNode = new Node(data);
         if (head == null) {
             head = newNode;
             tail = newNode;
-            newNode.next = head;
+            newNode.next = head; // اشاره به خودش (حلقه تک‌عضوی)
         } else {
-            tail.next = newNode;
-            tail = newNode;
-            tail.next = head;
+            tail.next = newNode; // اتصال آخر قبلی به جدید
+            tail = newNode;      // آپدیت کردن tail
+            tail.next = head;    // بستن حلقه (اتصال tail جدید به head)
         }
         size++;
     }
 
-    public Node getHead() {
-        return head;
-    }
-
+    // متد حرکت روی خانه‌ها (مهم برای بازی)
     public Node move(Node startNode, int steps) {
-        if (startNode == null) return null;
+        if (startNode == null) return head; // اگر نال بود از شروع برو
+
         Node current = startNode;
         for (int i = 0; i < steps; i++) {
-            current = current.next;
+            if (current.next != null) {
+                current = current.next;
+            } else {
+                // اگر لینک لیست پاره شده باشد (نباید اتفاق بیفتد)
+                current = head;
+            }
         }
         return current;
+    }
+
+    public Node getHead() {
+        return head;
     }
 
     public int size() {
