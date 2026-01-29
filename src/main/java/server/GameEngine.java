@@ -1,48 +1,63 @@
 package server;
 
 import ds.list.Node;
+import ds.queue.MyQueue;
 import model.GameState;
 import model.Player;
 import model.Property;
 import model.Tile;
 import model.TileType;
 import utils.Constants;
-import java.util.*;
 
 public class GameEngine {
     private GameState gameState;
     private TurnManager turnManager;
 
-    // صف کارت‌ها برای رعایت نوبت (Queue)
-    private Queue<String> chanceDeck;
-    private Queue<String> communityDeck;
+
+    private MyQueue chanceDeck;
+    private MyQueue communityDeck;
 
     public GameEngine(TurnManager turnManager) {
         this.gameState = GameState.getInstance();
         this.turnManager = turnManager;
+        this.chanceDeck = new MyQueue();
+        this.communityDeck = new MyQueue();
         initDecks();
     }
 
     private void initDecks() {
-        List<String> chanceList = Arrays.asList(
+        String[] chanceCards = {
                 "Advance to GO (+200)",
                 "Go to Jail",
                 "Bank pays you dividend (+50)",
                 "Speeding fine (-15)",
                 "Take a trip to Reading RR"
-        );
-        List<String> communityList = Arrays.asList(
+        };
+        String[] communityCards = {
                 "Doctor's fees (-50)",
                 "Income Tax refund (+20)",
                 "From sale of stock you get +50",
                 "Pay hospital fees (-100)",
                 "You inherit $100"
-        );
-        // بر زدن کارت‌ها و تبدیل به صف
-        Collections.shuffle(chanceList);
-        Collections.shuffle(communityList);
-        chanceDeck = new LinkedList<>(chanceList);
-        communityDeck = new LinkedList<>(communityList);
+        };
+
+
+        shuffleAndFill(chanceCards, chanceDeck);
+        shuffleAndFill(communityCards, communityDeck);
+    }
+
+    private void shuffleAndFill(String[] array, MyQueue queue) {
+
+        for (int i = array.length - 1; i > 0; i--) {
+            int j = (int) (Math.random() * (i + 1));
+            String temp = array[i];
+            array[i] = array[j];
+            array[j] = temp;
+        }
+
+        for (String card : array) {
+            queue.enqueue(card);
+        }
     }
 
     public synchronized String executeCommand(int playerId, String command) {
@@ -67,7 +82,7 @@ public class GameEngine {
         } else if (command.startsWith("END")) {
             if (!turnManager.hasRolled()) return "ERROR: You must roll dice before ending turn!";
             turnManager.nextTurn();
-            // رد کردن بازیکنان ورشکسته
+
             while (gameState.getPlayer(turnManager.getCurrentPlayerIndex() + 1).isBankrupt()) {
                 turnManager.nextTurn();
             }
@@ -77,7 +92,7 @@ public class GameEngine {
         return "ERROR: Unknown command.";
     }
 
-    // --- منطق رهن (Mortgage) ---
+    // متدهای رهن، فک رهن و ساخت خانه از گره‌های لیست پیوندی استفاده می‌کنند
     private String mortgageProperty(int playerId) {
         Player player = gameState.getPlayer(playerId);
         Node currentNode = findNodeById(player.getPosition());
@@ -95,13 +110,11 @@ public class GameEngine {
         prop.setMortgaged(true);
 
         ServerMain.broadcast("LOG:Player " + playerId + " mortgaged " + prop.getName());
-        // ارسال پیام گرافیکی (1 = رهن شده)
         ServerMain.broadcast("MORTGAGE_STATE:" + prop.getId() + ":1");
         broadcastPlayerState(player);
         return "SUCCESS: Mortgaged " + prop.getName();
     }
 
-    // --- منطق فک رهن (Unmortgage) ---
     private String unmortgageProperty(int playerId) {
         Player player = gameState.getPlayer(playerId);
         Node currentNode = findNodeById(player.getPosition());
@@ -113,20 +126,18 @@ public class GameEngine {
         if (prop.getOwnerId() != playerId) return "ERROR: You don't own this.";
         if (!prop.isMortgaged()) return "ERROR: Not mortgaged.";
 
-        int cost = prop.getUnmortgageCost(); // اصل پول + سود
+        int cost = prop.getUnmortgageCost();
         if (player.getMoney() < cost) return "ERROR: Need $" + cost + " to unmortgage.";
 
         player.setMoney(player.getMoney() - cost);
         prop.setMortgaged(false);
 
         ServerMain.broadcast("LOG:Player " + playerId + " unmortgaged " + prop.getName());
-        // ارسال پیام گرافیکی (0 = آزاد)
         ServerMain.broadcast("MORTGAGE_STATE:" + prop.getId() + ":0");
         broadcastPlayerState(player);
         return "SUCCESS: Property unmortgaged.";
     }
 
-    // --- منطق ساخت خانه ---
     private String buildHouse(int playerId) {
         Player player = gameState.getPlayer(playerId);
         Node currentNode = findNodeById(player.getPosition());
@@ -137,8 +148,6 @@ public class GameEngine {
 
         if (prop.getOwnerId() != playerId) return "ERROR: You don't own this.";
         if (prop.isMortgaged()) return "ERROR: Cannot build on mortgaged property.";
-        if (prop.getColorGroup().equals("BLACK") || prop.getColorGroup().equals("WHITE") || prop.getColorGroup().equals("NONE"))
-            return "ERROR: Cannot build here.";
 
         if (!ownsAllColorGroup(playerId, prop.getColorGroup()))
             return "ERROR: Need full color group (" + prop.getColorGroup() + ").";
@@ -156,7 +165,6 @@ public class GameEngine {
             ServerMain.broadcast("LOG:Player " + playerId + " built a HOTEL on " + prop.getName());
         }
 
-        // 5 یعنی هتل، 1-4 یعنی خانه
         int visualCount = prop.hasHotel() ? 5 : prop.getNumHouses();
         ServerMain.broadcast("HOUSE:" + prop.getId() + ":" + visualCount);
         broadcastPlayerState(player);
@@ -165,6 +173,8 @@ public class GameEngine {
 
     private boolean ownsAllColorGroup(int playerId, String color) {
         Node current = gameState.getBoard().getHead();
+        if (current == null) return false;
+        Node head = current;
         do {
             Tile t = (Tile) current.data;
             if (t instanceof Property) {
@@ -172,7 +182,7 @@ public class GameEngine {
                 if (p.getColorGroup().equals(color) && p.getOwnerId() != playerId) return false;
             }
             current = current.next;
-        } while (current != gameState.getBoard().getHead());
+        } while (current != head);
         return true;
     }
 
@@ -185,17 +195,14 @@ public class GameEngine {
         int total = d1 + d2;
         boolean isDouble = (d1 == d2);
 
-        // قوانین زندان
         if (player.isInJail()) {
             if (isDouble) {
                 player.setInJail(false);
-                ServerMain.broadcast("LOG:Player " + playerId + " rolled doubles -> Free!");
             } else {
                 player.incrementJailTurn();
                 if (player.getTurnsInJail() >= 3) {
                     player.setMoney(player.getMoney() - 50);
                     player.setInJail(false);
-                    ServerMain.broadcast("LOG:Player " + playerId + " paid bail.");
                 } else {
                     broadcastPlayerState(player);
                     return "In Jail. Rolled " + total + ". Stuck.";
@@ -203,13 +210,12 @@ public class GameEngine {
             }
         }
 
-        // حرکت
         int oldPos = player.getPosition();
+        // استفاده از متد move لیست پیوندی
         Node newNode = gameState.getBoard().move(findNodeById(oldPos), total);
         Tile newTile = (Tile) newNode.data;
         int newPos = newTile.getId();
 
-        // رفتن به زندان
         if (newTile.getType() == TileType.GO_TO_JAIL) {
             sendToJail(player);
             return "Rolled " + total + ". Go Directly to Jail!";
@@ -235,46 +241,13 @@ public class GameEngine {
         return result;
     }
 
-    private void handleTileInteraction(Player player, Tile tile) {
-        if (tile instanceof Property) {
-            Property prop = (Property) tile;
-            if (prop.getOwnerId() == -1) {
-                // Available
-            } else if (prop.getOwnerId() != player.getId()) {
-                int rent = calculateRent(prop);
-                if (rent > 0) payToPlayer(player, prop.getOwnerId(), rent);
-            }
-        } else if (tile.getType() == TileType.TAX) {
-            int tax = (tile.getId() == 4) ? 200 : 100;
-            player.setMoney(player.getMoney() - tax);
-        } else if (tile.getType() == TileType.CHANCE || tile.getType() == TileType.COMMUNITY_CHEST) {
-            drawCard(player);
-        }
-    }
-
-    private int calculateRent(Property prop) {
-        if (prop.isMortgaged()) return 0; // اگر رهن باشد اجاره ندارد
-
-        int rent = prop.getBaseRent();
-        // برای راه‌آهن و یوتیلیتی فعلاً ساده (اجاره پایه)
-        if (prop.getColorGroup().equals("BLACK") || prop.getColorGroup().equals("WHITE") || prop.getColorGroup().equals("NONE")) {
-            return rent;
-        }
-
-        if (prop.hasHotel()) return rent * 10;
-        if (prop.getNumHouses() > 0) return (int) (rent * Math.pow(2.5, prop.getNumHouses()));
-        if (ownsAllColorGroup(prop.getOwnerId(), prop.getColorGroup())) return rent * 2;
-
-        return rent;
-    }
-
     private void drawCard(Player player) {
-        Queue<String> deck = (Math.random() > 0.5) ? chanceDeck : communityDeck;
+        MyQueue deck = (Math.random() > 0.5) ? chanceDeck : communityDeck;
         String type = (deck == chanceDeck) ? "Chance" : "Community Chest";
 
-        String card = deck.poll(); // برداشتن از سر صف
+        String card = (String) deck.dequeue();
         if (card == null) return;
-        deck.offer(card); // گذاشتن ته صف
+        deck.enqueue(card);
 
         ServerMain.broadcast("LOG:Player " + player.getId() + " drew " + type + ": " + card);
 
@@ -293,28 +266,52 @@ public class GameEngine {
         }
     }
 
+    private void handleTileInteraction(Player player, Tile tile) {
+        if (tile instanceof Property) {
+            Property prop = (Property) tile;
+            if (prop.getOwnerId() != -1 && prop.getOwnerId() != player.getId()) {
+                int rent = calculateRent(prop);
+                if (rent > 0) payToPlayer(player, prop.getOwnerId(), rent);
+            }
+        } else if (tile.getType() == TileType.TAX) {
+            int tax = (tile.getId() == 4) ? 200 : 100;
+            player.setMoney(player.getMoney() - tax);
+        } else if (tile.getType() == TileType.CHANCE || tile.getType() == TileType.COMMUNITY_CHEST) {
+            drawCard(player);
+        }
+    }
+
+    private int calculateRent(Property prop) {
+        if (prop.isMortgaged()) return 0;
+        int rent = prop.getBaseRent();
+        if (prop.getColorGroup().equals("BLACK") || prop.getColorGroup().equals("WHITE") || prop.getColorGroup().equals("NONE")) return rent;
+        if (prop.hasHotel()) return rent * 10;
+        if (prop.getNumHouses() > 0) return (int) (rent * Math.pow(2.5, prop.getNumHouses()));
+        if (ownsAllColorGroup(prop.getOwnerId(), prop.getColorGroup())) return rent * 2;
+        return rent;
+    }
+
     private void handleBankruptcy(Player player) {
         player.setBankrupt(true);
         player.setMoney(0);
-        ServerMain.broadcast("LOG:PLAYER " + player.getId() + " BANKRUPT! Assets released.");
 
         Node current = gameState.getBoard().getHead();
+        if (current == null) return;
+        Node head = current;
         do {
             Tile t = (Tile) current.data;
             if (t instanceof Property) {
                 Property prop = (Property) t;
                 if (prop.getOwnerId() == player.getId()) {
-                    prop.reset(); // پاک کردن مالکیت و خانه‌ها
+                    prop.reset();
                     ServerMain.broadcast("OWNER:" + prop.getId() + ":-1");
                     ServerMain.broadcast("HOUSE:" + prop.getId() + ":0");
-                    ServerMain.broadcast("MORTGAGE_STATE:" + prop.getId() + ":0");
                 }
             }
             current = current.next;
-        } while (current != gameState.getBoard().getHead());
+        } while (current != head);
     }
 
-    // --- متدهای کمکی استاندارد ---
     private void sendToJail(Player player) {
         player.setPosition(10);
         player.setInJail(true);
@@ -338,20 +335,15 @@ public class GameEngine {
 
         if (tile instanceof Property) {
             Property prop = (Property) tile;
-            if (prop.getOwnerId() == -1) {
-                if (player.getMoney() >= prop.getPrice()) {
-                    player.setMoney(player.getMoney() - prop.getPrice());
-                    prop.setOwnerId(playerId);
-                    ServerMain.broadcast("LOG:Player " + playerId + " bought " + prop.getName());
-                    ServerMain.broadcast("OWNER:" + tile.getId() + ":" + playerId);
-                    broadcastPlayerState(player);
-                    return "SUCCESS: You bought " + prop.getName();
-                }
-                return "ERROR: Not enough money.";
+            if (prop.getOwnerId() == -1 && player.getMoney() >= prop.getPrice()) {
+                player.setMoney(player.getMoney() - prop.getPrice());
+                prop.setOwnerId(playerId);
+                ServerMain.broadcast("OWNER:" + tile.getId() + ":" + playerId);
+                broadcastPlayerState(player);
+                return "SUCCESS: You bought " + prop.getName();
             }
-            return "ERROR: Already owned.";
         }
-        return "ERROR: Not for sale.";
+        return "ERROR: Transaction failed.";
     }
 
     private void broadcastPlayerState(Player p) {
@@ -360,11 +352,13 @@ public class GameEngine {
 
     private Node findNodeById(int tileId) {
         Node current = gameState.getBoard().getHead();
+        if (current == null) return null;
+        Node head = current;
         do {
             Tile t = (Tile) current.data;
             if (t.getId() == tileId) return current;
             current = current.next;
-        } while (current != gameState.getBoard().getHead());
-        return gameState.getBoard().getHead();
+        } while (current != head);
+        return head;
     }
 }

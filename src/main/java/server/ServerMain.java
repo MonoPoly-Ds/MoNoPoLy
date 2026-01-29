@@ -1,20 +1,20 @@
 package server;
 
 import model.GameState;
-import utils.Constants; // ایمپورت جدید
+import utils.Constants;
+import ds.list.LinkedList;
+import ds.list.Node;
 
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.ArrayList;
-import java.util.List;
 
 public class ServerMain {
-    // استفاده از Constants به جای اعداد هاردکد شده
     private static final int PORT = Constants.PORT;
     private static final int MAX_PLAYERS = Constants.MAX_PLAYERS;
 
-    private static List<ClientHandler> connectedClients = new ArrayList<>();
+
+    private static LinkedList connectedClients = new LinkedList();
 
     public static void main(String[] args) {
         GameState.getInstance();
@@ -23,13 +23,13 @@ public class ServerMain {
 
         try (ServerSocket serverSocket = new ServerSocket(PORT)) {
             System.out.println("Server started on port " + PORT);
-            System.out.println("Waiting for " + MAX_PLAYERS + " players...");
 
             while (connectedClients.size() < MAX_PLAYERS) {
                 Socket clientSocket = serverSocket.accept();
 
                 int pId = connectedClients.size() + 1;
                 ClientHandler handler = new ClientHandler(clientSocket, pId, gameEngine);
+
                 connectedClients.add(handler);
                 handler.start();
 
@@ -37,17 +37,13 @@ public class ServerMain {
                 System.out.println("Player " + pId + " connected.");
 
                 if (connectedClients.size() == MAX_PLAYERS) {
-                    System.out.println("Game Full! Starting...");
                     GameState.getInstance().startGame();
-
                     broadcast("GAME_STARTED");
 
-                    // ارسال وضعیت اولیه (پول و مکان)
                     for (int i = 1; i <= MAX_PLAYERS; i++) {
                         model.Player p = GameState.getInstance().getPlayer(i);
                         broadcast("STATS:" + p.getId() + ":" + p.getName() + ":" + p.getMoney() + ":" + p.getPosition());
                     }
-
                     broadcast("TURN:1");
                 }
             }
@@ -57,8 +53,14 @@ public class ServerMain {
     }
 
     public static void broadcast(String msg) {
-        for (ClientHandler client : connectedClients) {
+        Node current = connectedClients.getHead();
+        if (current == null) return;
+
+        Node head = current;
+        do {
+            ClientHandler client = (ClientHandler) current.data;
             client.sendMessage(msg);
-        }
+            current = current.next;
+        } while (current != head);
     }
 }

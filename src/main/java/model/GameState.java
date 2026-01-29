@@ -1,18 +1,17 @@
 package model;
 
 import ds.list.LinkedList;
+import ds.list.Node;
 import utils.Constants;
-import java.util.ArrayList;
-import java.util.List;
 
 public class GameState {
     private static GameState instance;
     private LinkedList board;
-    private List<Player> players;
+    private LinkedList players;
     private boolean isGameStarted;
 
     private GameState() {
-        players = new ArrayList<>();
+        players = new LinkedList();
         board = new LinkedList();
         isGameStarted = false;
         initBoard();
@@ -28,30 +27,26 @@ public class GameState {
             TileType type = determineTileType(i);
             String name = determineTileName(i);
 
-            // --- تغییرات برای قابل خرید شدن راه‌آهن و خدمات ---
+
             if (type == TileType.PROPERTY) {
-                // املاک معمولی
                 int price = (i + 1) * 10 + 50;
                 int rent = (i + 1) * 2;
                 String color = determineColor(i);
                 board.add(new Property(i, name, price, rent, color));
             }
             else if (type == TileType.RAILROAD) {
-                // راه‌آهن‌ها (قیمت ثابت ۲۰۰، اجاره ۲۵)
                 board.add(new Property(i, name, 200, 25, "BLACK"));
             }
             else if (type == TileType.UTILITY) {
-                // اداره برق و آب (قیمت ثابت ۱۵۰، اجاره ۲۰)
                 board.add(new Property(i, name, 150, 20, "WHITE"));
             }
             else {
-                // سایر خانه‌ها (Tax, Go, Jail, ...) به صورت Tile معمولی می‌مانند
                 board.add(new Tile(i, name, type));
             }
         }
     }
 
-    // تشخیص رنگ ملک‌ها
+
     private String determineColor(int i) {
         if (i == 1 || i == 3) return "BROWN";
         if (i == 6 || i == 8 || i == 9) return "LIGHT_BLUE";
@@ -66,10 +61,8 @@ public class GameState {
 
     private TileType determineTileType(int i) {
         if (i == 0) return TileType.GO;
-        // تعریف خانه‌های مالیات
-        if (i == 4) return TileType.TAX; // Income Tax
-        if (i == 38) return TileType.TAX; // Luxury Tax
-
+        if (i == 4) return TileType.TAX;
+        if (i == 38) return TileType.TAX;
         if (i == 5 || i == 15 || i == 25 || i == 35) return TileType.RAILROAD;
         if (i == 12 || i == 28) return TileType.UTILITY;
         if (i == 10) return TileType.JAIL;
@@ -90,8 +83,28 @@ public class GameState {
     }
 
     public LinkedList getBoard() { return board; }
-    public void addPlayer(int id, String name) { players.add(new Player(id, name, Constants.STARTING_MONEY)); }
-    public Player getPlayer(int id) { for (Player p : players) if (p.getId() == id) return p; return null; }
+
+    public void addPlayer(int id, String name) {
+
+        players.add(new Player(id, name, Constants.STARTING_MONEY));
+    }
+
+    public Player getPlayer(int id) {
+
+        Node current = players.getHead();
+        if (current == null) return null;
+
+        Node head = current;
+        do {
+            Player p = (Player) current.data;
+            if (p.getId() == id) {
+                return p;
+            }
+            current = current.next;
+        } while (current != head);
+        return null;
+    }
+
     public boolean isGameStarted() { return isGameStarted; }
     public void startGame() { isGameStarted = true; }
 }

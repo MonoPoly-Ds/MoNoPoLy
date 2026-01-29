@@ -43,7 +43,7 @@ public class ClientHandler extends Thread {
         }
 
     }
-    // این متد را به انتهای کلاس ClientHandler اضافه کنید
+
     public void sendMessage(String msg) {
         if (out != null) {
             out.println(msg);
