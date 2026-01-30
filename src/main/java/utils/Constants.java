@@ -2,7 +2,7 @@ package utils;
 
 public class Constants {
 
-    public static final String HOST = "192.168.1.108";
+    public static final String HOST = "localhost";
     public static final int PORT = 8080;
 
 

@@ -2,17 +2,24 @@ package model;
 
 import ds.list.LinkedList;
 import ds.list.Node;
+import ds.graph.MyGraph; // ایمپورت کلاس گراف
 import utils.Constants;
 
 public class GameState {
     private static GameState instance;
     private LinkedList board;
     private LinkedList players;
+    private MyGraph transactionGraph; // گراف برای ثبت تراکنش‌ها
     private boolean isGameStarted;
 
     private GameState() {
         players = new LinkedList();
         board = new LinkedList();
+
+        // مقداردهی اولیه گراف با ظرفیت تعداد بازیکنان (مثلاً 4)
+        // اگر Constants.MAX_PLAYERS تعریف نشده، عدد 4 بگذارید
+        transactionGraph = new MyGraph(Constants.MAX_PLAYERS);
+
         isGameStarted = false;
         initBoard();
     }
@@ -26,7 +33,6 @@ public class GameState {
         for (int i = 0; i < Constants.TOTAL_TILES; i++) {
             TileType type = determineTileType(i);
             String name = determineTileName(i);
-
 
             if (type == TileType.PROPERTY) {
                 int price = (i + 1) * 10 + 50;
@@ -45,7 +51,6 @@ public class GameState {
             }
         }
     }
-
 
     private String determineColor(int i) {
         if (i == 1 || i == 3) return "BROWN";
@@ -85,12 +90,13 @@ public class GameState {
     public LinkedList getBoard() { return board; }
 
     public void addPlayer(int id, String name) {
-
         players.add(new Player(id, name, Constants.STARTING_MONEY));
+
+        // اضافه کردن بازیکن به عنوان یک گره در گراف تراکنش‌ها
+        transactionGraph.addNode(id, name);
     }
 
     public Player getPlayer(int id) {
-
         Node current = players.getHead();
         if (current == null) return null;
 
@@ -103,6 +109,11 @@ public class GameState {
             current = current.next;
         } while (current != head);
         return null;
+    }
+
+    // متد جدید برای دسترسی به گراف (مورد نیاز GameEngine)
+    public MyGraph getTransactionGraph() {
+        return transactionGraph;
     }
 
     public boolean isGameStarted() { return isGameStarted; }

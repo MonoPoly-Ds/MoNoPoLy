@@ -1,6 +1,7 @@
 package model;
 
 import java.io.Serializable;
+import ds.tree.AssetTree; // اضافه شدن ایمپورت درخت دارایی
 
 public class Player implements Serializable {
     private int id;
@@ -11,6 +12,9 @@ public class Player implements Serializable {
     private int turnsInJail;
     private boolean isBankrupt;
 
+    // اضافه شدن فیلد درخت دارایی برای نمایش سلسله‌مراتب
+    private AssetTree assetTree;
+
     public Player(int id, String name, int startingMoney) {
         this.id = id;
         this.name = name;
@@ -19,9 +23,17 @@ public class Player implements Serializable {
         this.inJail = false;
         this.turnsInJail = 0;
         this.isBankrupt = false;
+
+        // مقداردهی اولیه درخت با نام بازیکن به عنوان ریشه
+        this.assetTree = new AssetTree(name);
     }
 
-    // Getters and Setters
+    // متد جدید برای دسترسی به درخت دارایی‌های بازیکن
+    public AssetTree getAssetTree() {
+        return assetTree;
+    }
+
+    // --- سایر گترها و سترها (بدون تغییر) ---
     public int getId() { return id; }
     public String getName() { return name; }
     public int getMoney() { return money; }
